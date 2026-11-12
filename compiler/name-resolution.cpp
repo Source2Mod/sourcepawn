@@ -380,6 +380,24 @@ bool TypedefDecl::Bind(SemaContext& sc) {
     return true;
 }
 
+// Disallow "const" on object types. Transitive const is kind of silly and this
+// eliminates any potential confusion around it in the SP2 object model.
+static void CheckConstOnObjectType(const token_pos_t& pos, const typeinfo_t& type) {
+    if (!type.is_const || !type.type)
+        return;
+
+    // Unresovled arrays are validated later.
+    if (!type.dim_exprs.empty())
+        return;
+
+    Type* t = type.type;
+    if (t->isReference())
+        t = t->inner();
+
+    if (t->isClass())
+        report(pos, 491) << t;
+}
+
 FunctionType* TypedefInfo::Bind(SemaContext& sc) {
     if (!sc.BindType(pos, &ret_type))
         return nullptr;
@@ -392,6 +410,8 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
 
         if (!arg->type.dim_exprs.empty())
             ResolveArrayType(sc.sema(), pos, &arg->type, sARGUMENT);
+
+        CheckConstOnObjectType(pos, arg->type);
 
         if (arg->type.is_varargs)
             variadic = true;
@@ -512,6 +532,13 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         if (type_.is_varargs)
             markusage(this, uREAD);
     }
+
+    // |this| is always const. We don't have a way to distinguish transitive
+    // const from "immutable variable", so we just skip the const legality
+    // checks here. It doesn't actually impact anything since the error is just
+    // to prevent accidental use. There are no semantics around const objects.
+    if (!is_this())
+        CheckConstOnObjectType(pos_, type_);
 
     if (is_public_)
         is_read_ = true;
@@ -860,6 +887,8 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!decl_.type.dim_exprs.empty())
         ResolveArrayType(outer_sc.sema(), pos_, &decl_.type, sLOCAL);
 
+    CheckConstOnObjectType(pos_, decl_.type);
+
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
     // implementation. Note that args are checked similarly in BindArgs.
@@ -870,10 +899,12 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (this_type_) {
         typeinfo_t typeinfo = {};
         typeinfo.set_type(this_type_);
-        typeinfo.is_const = true;
+        // Enum structs are never const, even as |this|.
+        typeinfo.is_const = !this_type_->isEnumStruct();
 
         auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT,
                                 VARDECL_DEFAULT, nullptr);
+        decl->set_is_this();
         assert(args_[0] == nullptr);
         args_[0] = decl;
     }
@@ -891,7 +922,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
     if (!ok)
         return false;
-
 
     SemaContext sc(outer_sc, this);
     auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {
@@ -1021,17 +1051,17 @@ bool FunctionDecl::BindArgs(SemaContext& sc) {
 bool
 PragmaUnusedStmt::Bind(SemaContext& sc)
 {
-    std::vector<VarDeclBase*> symbols;
+    std::vector<Decl*> symbols;
     for (const auto& name : names_) {
         auto decl = FindSymbol(sc, name);
-        if (!decl || !decl->as<VarDeclBase>()) {
+        if (!decl || !(decl->as<VarDeclBase>() || decl->as<FunctionDecl>())) {
             report(pos_, 17) << name;
             continue;
         }
-        symbols.emplace_back(decl->as<VarDeclBase>());
+        symbols.emplace_back(decl);
     }
 
-    symbols_ = PoolArray<VarDeclBase*>(symbols);
+    symbols_ = PoolArray<Decl*>(symbols);
 
     return names_.size() == symbols_.size();
 }
@@ -1477,12 +1507,14 @@ bool LayoutDecl::BindGetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
     auto fun = prop->getter();
 
     // There should be no extra arguments.
-    if (fun->args().size() > 1) {
+    int expected_args = prop->is_static() ? 0 : 1;
+    if (fun->args().size() > expected_args) {
         report(fun->pos(), 127);
         return false;
     }
 
-    fun->set_this_type(type);
+    if (!prop->is_static())
+        fun->set_this_type(type);
 
     if (!fun->Bind(sc))
         return false;
@@ -1492,23 +1524,19 @@ bool LayoutDecl::BindGetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
 bool LayoutDecl::BindSetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
     auto fun = prop->setter();
 
-    // Must have one extra argument taking the return type.
-    if (fun->args().size() > 2) {
+    int expected_args = prop->is_static() ? 1 : 2;
+    if (fun->args().size() != expected_args) {
         report(prop, 150) << prop->type();
         return false;
     }
 
-    fun->set_this_type(type);
+    if (!prop->is_static())
+        fun->set_this_type(type);
 
     if (!fun->Bind(sc))
         return false;
 
-    if (fun->args().size() <= 1) {
-        report(prop, 150) << prop->type();
-        return false;
-    }
-
-    auto decl = fun->args()[1];
+    auto decl = fun->args()[expected_args - 1];
     if (decl->init_rhs() || decl->type_info().qualified() != prop->type()) {
         report(prop, 150) << prop->type();
         return false;

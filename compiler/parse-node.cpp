@@ -32,7 +32,8 @@ VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
     implicit_dynamic_array_(false),
     is_shared_((flags & VARDECL_SHARED) == VARDECL_SHARED),
     already_bound_(false),
-    is_emitted_(false)
+    is_emitted_(false),
+    is_this_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)
@@ -123,7 +124,8 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
 }
 
 void FunctionDecl::update_return_type(Type* type) {
-    signature_ = CompileContext::get().types()->UpdateReturnType(signature_, QualType(type));
+    signature_ = CompileContext::get().types()->UpdateReturnType(
+        signature_, QualType(type, signature_->return_type().is_const()));
 }
 
 int FunctionDecl::FindNamedArg(Atom* name) const {
@@ -280,9 +282,14 @@ Type* PropertyDecl::property_type() const {
 
     if (getter_)
         return getter_->type_info().type;
-    if (!setter_ || setter_->args().size() != 2)
+    if (!setter_)
         return types->type_void();
-    ArgDecl* valp = setter_->args()[1];
+
+    size_t nargs = is_static_ ? 1 : 2;
+    if (setter_->args().size() != nargs)
+        return types->type_void();
+
+    ArgDecl* valp = setter_->args()[nargs - 1];
     return *valp->type();
 }
 

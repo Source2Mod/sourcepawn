@@ -291,13 +291,13 @@ class StaticFieldRef final : public Value
 class FieldRef final : public Lvalue
 {
   public:
-    FieldRef(Expr* parent, int token, Value* base, LayoutFieldDecl* field)
+    FieldRef(Expr* parent, int token, Value* base, LayoutFieldDecl* field, QualType type)
       : Lvalue(IrKind::FieldRef, parent),
         token_(token),
         base_(base),
         field_(field)
     {
-        type_ = field->type();
+        type_ = type;
     }
 
     int token() const { return token_; }
@@ -344,12 +344,14 @@ class Accessor final : public Lvalue
         base_(base),
         prop_(prop)
     {
+        assert((base_ == nullptr) == prop->is_static());
         type_ = prop->property_type();
     }
 
     int token() const { return token_; }
     Value* base() const { return base_; }
     PropertyDecl* accessor() const { return prop_; }
+    bool is_static() const { return prop_->is_static(); }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::Accessor; }
 
@@ -647,8 +649,8 @@ class Array final : public Value
 class Slice final : public Value
 {
   public:
-    Slice(Value* base, Value* index, Type* type)
-      : Value(IrKind::Slice, base->pn(), QualType(type)),
+    Slice(Value* base, Value* index, QualType type)
+      : Value(IrKind::Slice, base->pn(), type),
         base_(base),
         index_(index)
     {}

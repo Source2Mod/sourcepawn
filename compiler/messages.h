@@ -189,7 +189,7 @@ static const char* errmsg[] = {
     /*174*/ "symbol '%s' is a type and cannot be used as a value\n",
     /*175*/ "constructors cannot be static\n",
     /*176*/ "non-static method or property '%s' must be called with a value of type '%s'\n",
-    /*177*/ "static method '%s' must be invoked via its type (try '%s.%s')\n",
+    /*177*/ "static method '%s' must be accessed via its type (try '%s.%s')\n",
     /*178*/ "value %d is outside the guaranteed range [%d, %d] of %s\n",
     /*179*/ "value %d is outside the range [%d, %d] of %s\n",
     /*180*/ "function return type differs from prototype. expected '%s', but got '%s'\n",
@@ -258,6 +258,7 @@ static const char* warnmsg[] = {
     /*252*/ "sizeof on scalar will always return 1\n",
     /*253*/ "implicit conversion from \"%s\" to \"%s\" is undefined\n",
     /*254*/ "sizeof on enum structs is no longer constant, implicitly creating a dynamic array\n",
+    /*255*/ "break inside switch will terminate the outer loop, not the switch\n",
 };
 
 static const char* errmsg_ex[] = {
@@ -351,4 +352,7 @@ static const char* errmsg_ex[] = {
     /*487*/ "stack-allocated arrays cannot be passed to dynamically sized arguments that are captured\n",
     /*488*/ "floating-point literal is not allowed in preprocessor expression\n",
     /*489*/ "closures that capture variables cannot be converted to legacy function types\n",
+    /*490*/ "SOURCE_DATE_EPOCH must be a non-negative integer, got \"%s\"\n",
+    /*491*/ "cannot use 'const' with object type '%s'\n",
+    /*492*/ "static property '%s' must be accessed via its type (try '%s.%s')\n",
 };

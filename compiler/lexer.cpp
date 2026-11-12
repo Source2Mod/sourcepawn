@@ -7,6 +7,7 @@
 //
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -935,8 +936,10 @@ void Lexer::HandleSingleLineComment() {
     while (true) {
         char c = peek();
         if (c == '\0' || IsNewline(c)) {
-            if (prev_c == '\\')
-                report(49); // invalid line continuation
+            if (prev_c == '\\') {
+                auto pos = GetTokenPos();
+                report(pos, 49); // invalid line continuation
+            }
             break;
         }
         if (!IsSpace(c))
@@ -961,12 +964,12 @@ void Lexer::HandleMultiLineComment() {
         }
         if (match_char('/')) {
             if (peek() == '*')
-                report(216); // nested comment
+                report(GetTokenPos(), 216); // nested comment
             continue;
         }
         char c = peek();
         if (c == '\0') {
-            report(1) << "*/" << "-end of file-";
+            report(GetTokenPos(), 1) << "*/" << "-end of file-";
             return;
         }
         if (IsNewline(c)) {
@@ -1615,6 +1618,12 @@ int Lexer::LexNewToken() {
     } while (tok->id == tENTERED_MACRO);
 
     return tok->id;
+}
+
+token_pos_t Lexer::GetTokenPos() {
+    token_pos_t pos;
+    FillTokenPos(&pos);
+    return pos;
 }
 
 void Lexer::FillTokenPos(token_pos_t* pos) {
@@ -2451,6 +2460,21 @@ int
 ishex(char c)
 {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+/*  ParseInt64
+ *
+ *  Parse a decimal integer that makes up all of "str", without overflow.
+ */
+std::optional<int64_t>
+ParseInt64(const char* str)
+{
+    char* endptr;
+    errno = 0;
+    int64_t value = std::strtoll(str, &endptr, 10);
+    if (errno == ERANGE || endptr == str || *endptr != '\0')
+        return {};
+    return value;
 }
 
 /*  isoctal

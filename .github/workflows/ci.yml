@@ -16,16 +16,31 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         build_type: [optimize, debug]
         build_target: [x86, x64]
-        # The macos builder has min. XCode 10.3, so no x86 builds.
         exclude:
           - os: macos-latest
             build_target: x86
+          - os: macos-latest
+            build_target: x64
         # Test if ARM compiles on windows.
         include:
           - os: windows-latest
             build_type: optimize
             build_target: arm64
           - os: windows-latest
+            build_type: debug
+            build_target: arm64
+          # Linux on ARM, natively, so the tests run as well.
+          - os: ubuntu-24.04-arm
+            build_type: optimize
+            build_target: arm64
+          - os: ubuntu-24.04-arm
+            build_type: debug
+            build_target: arm64
+          # macOS runners are arm64, so these build and test natively.
+          - os: macos-latest
+            build_type: optimize
+            build_target: arm64
+          - os: macos-latest
             build_type: debug
             build_target: arm64
       fail-fast: false
@@ -74,8 +89,8 @@ jobs:
           python ../configure.py --enable-${{ matrix.build_type }} --targets=${{ matrix.build_target }} $ENABLE_ASAN
           ambuild
 
-      # Cannot run tests for ARM since the builder is amd64.
+      # Cannot run tests for ARM on Windows since the builder is amd64.
       - name: Test
-        if: ${{ !startsWith(matrix.build_target, 'arm') }}
+        if: ${{ !(startsWith(runner.os, 'Windows') && startsWith(matrix.build_target, 'arm')) }}
         run: |
           python tests/runtests.py objdir

@@ -712,7 +712,7 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
             fprintf(out_, "Typename %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
             break;
         case IrKind::FunctionRef:
-            fprintf(out_, "FunctionRef %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+            fprintf(out_, "FunctionRef %s\n", expr->to<ir::FunctionRef>()->decl()->name()->chars());
             break;
         case IrKind::Variable:
             fprintf(out_, "Variable %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
@@ -925,9 +925,11 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
         case IrKind::Accessor: {
             auto e = expr->to<ir::Accessor>();
             fprintf(out_, "Accessor '%s'\n", expr->pn()->to<FieldAccessExpr>()->name()->chars());
-            stack_.push_back(is_last);
-            PrintIr(e->base(), true);
-            stack_.pop_back();
+            if (!e->is_static()) {
+                stack_.push_back(is_last);
+                PrintIr(e->base(), true);
+                stack_.pop_back();
+            }
             break;
         }
         case IrKind::Cast: {

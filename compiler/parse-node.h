@@ -372,6 +372,8 @@ class VarDeclBase : public Decl
     void set_is_shared() { is_shared_ = true; }
     bool is_captured() const { return is_captures_; }
     void set_is_captured() { is_captures_ = true; }
+    bool is_this() const { return is_this_; }
+    void set_is_this() { is_this_ = true; }
 
   protected:
     typeinfo_t type_;
@@ -389,6 +391,7 @@ class VarDeclBase : public Decl
     bool is_captures_ : 1;
     bool already_bound_ : 1;
     bool is_emitted_ : 1;
+    bool is_this_ : 1;
     Label addr_;
 };
 
@@ -1501,11 +1504,11 @@ class PragmaUnusedStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PragmaUnusedStmt; }
 
     PoolArray<Atom*>& names() { return names_; }
-    PoolArray<VarDeclBase*>& symbols() { return symbols_; }
+    PoolArray<Decl*>& symbols() { return symbols_; }
 
   private:
     PoolArray<Atom*> names_;
-    PoolArray<VarDeclBase*> symbols_;
+    PoolArray<Decl*> symbols_;
 };
 
 class FunctionDecl : public Decl
@@ -1891,11 +1894,12 @@ class ClassDecl : public LayoutDecl
 class PropertyDecl : public Decl {
   public:
     PropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
-                 MemberFunctionDecl* getter, MemberFunctionDecl* setter)
+                 MemberFunctionDecl* getter, MemberFunctionDecl* setter, bool is_static = false)
       : Decl(StmtKind::PropertyDecl, pos, name),
         type_(type),
         getter_(getter),
-        setter_(setter)
+        setter_(setter),
+        is_static_(is_static)
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PropertyDecl; }
@@ -1907,6 +1911,7 @@ class PropertyDecl : public Decl {
     QualType type() const { return type_.qualified(); }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
+    bool is_static() const { return is_static_; }
     LayoutDecl* parent() const {
         assert(getter_ || setter_);
         return getter_ ? getter_->parent() : setter_->parent();
@@ -1916,6 +1921,7 @@ class PropertyDecl : public Decl {
     typeinfo_t type_;
     MemberFunctionDecl* getter_;
     MemberFunctionDecl* setter_;
+    bool is_static_ : 1;
 };
 
 class UpvarDecl : public Decl
